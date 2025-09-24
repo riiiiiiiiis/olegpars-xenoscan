@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XENOSCAN v0.1 - SPECIMEN ANALYZER</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0f0a;
+            color: #00ff41;
+            font-family: 'VT323', monospace;
+            font-size: 16px;
+            overflow: hidden;
+            position: relative;
+            height: 100vh;
+            text-transform: uppercase;
+        }
+        
+        /* CRT эффект */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 65, 0.03) 0px,
+                transparent 1px,
+                transparent 2px,
+                rgba(0, 255, 65, 0.03) 3px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        /* Шум */
+        @keyframes noise {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.05; }
+        }
+        
+        .noise {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="5"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.02"/></svg>');
+            pointer-events: none;
+            z-index: 999;
+            animation: noise 0.2s infinite;
+        }
+        
+        /* Хроматическая аберрация */
+        @keyframes chromatic {
+            0%, 100% { text-shadow: 1px 0 #ff6b00, -1px 0 #00ffff; }
+            50% { text-shadow: -1px 0 #ff6b00, 1px 0 #00ffff; }
+        }
+        
+        .main-container {
+            width: 100%;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 250px 1fr 250px;
+            gap: 16px;
+            padding: 16px;
+            background: radial-gradient(ellipse at center, rgba(0, 255, 65, 0.05) 0%, transparent 70%);
+        }
+        
+        /* Панели */
+        .panel {
+            background: rgba(0, 20, 10, 0.8);
+            border: 1px solid #00ff41;
+            padding: 16px;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3), inset 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+        
+        .panel::before {
+            content: "";
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            bottom: -1px;
+            background: linear-gradient(45deg, #00ff41, transparent, #ff6b00);
+            opacity: 0.5;
+            z-index: -1;
+            animation: borderPulse 3s infinite;
+        }
+        
+        @keyframes borderPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+        
+        /* Левая панель - CAMERA IN */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .video-container {
+            aspect-ratio: 9/16;
+            background: #000;
+            border: 1px solid #00ff41;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .video-container video, .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .video-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(0, 20, 10, 0.9);
+            padding: 4px 8px;
+            font-size: 14px;
+            border: 1px solid #00ff41;
+            text-shadow: 0 0 5px #00ff41;
+        }
+        
+        /* Центральная панель */
+        .center-panel {
+            display: grid;
+            grid-template-rows: 60px 1fr auto;
+            gap: 16px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            border-bottom: 1px solid #00ff41;
+        }
+        
+        .title {
+            font-size: 32px;
+            text-shadow: 0 0 10px #00ff41, 0 0 20px #00ff41;
+            animation: chromatic 2s infinite;
+        }
+        
+        .protocol {
+            font-size: 18px;
+            color: #ff6b00;
+        }
+        
+        /* Центральная зона сканирования */
+        .scan-area {
+            position: relative;
+            height: 100%;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: repeating-conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(0, 255, 65, 0.02) 10deg, transparent 20deg);
+        }
+        
+        .specimen-container {
+            position: relative;
+            width: 80%;
+            height: 80%;
+            max-width: 500px;
+            max-height: 500px;
+        }
+        
+        .specimen-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 20px #00ff41);
+            opacity: 0.9;
+        }
+        
+        /* Wireframe overlay */
+        .wireframe-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .wireframe-overlay svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Круговой ретикул */
+        .reticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120%;
+            height: 120%;
+            pointer-events: none;
+            animation: rotate 20s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        .reticle svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Сканирующая линия */
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff41, transparent);
+            animation: scan 3s linear infinite;
+        }
+        
+        @keyframes scan {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+        
+        /* Лейблы частей */
+        .part-label {
+            position: absolute;
+            padding: 4px 8px;
+            background: rgba(0, 20, 10, 0.9);
+            border: 1px solid #00ff41;
+            font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        
+        .part-label::before {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 1px;
+            background: #00ff41;
+        }
+        
+        /* Правая панель */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        /* Панель информации */
+        .info-panel {
+            padding: 16px;
+            display: grid;
+            gap: 16px;
+        }
+        
+        .specimen-info {
+            border-bottom: 1px solid #00ff41;
+            padding-bottom: 8px;
+        }
+        
+        .specimen-id {
+            font-size: 24px;
+            color: #ff6b00;
+            text-shadow: 0 0 10px #ff6b00;
+            margin-bottom: 8px;
+        }
+        
+        .acquisition-info {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        /* RARITY индикатор */
+        .rarity-container {
+            margin: 16px 0;
+        }
+        
+        .rarity-label {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .rarity-value {
+            color: #ff6b00;
+        }
+        
+        .rarity-bar {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .rarity-segment {
+            flex: 1;
+            height: 12px;
+            background: rgba(0, 255, 65, 0.2);
+            border: 1px solid #00ff41;
+            transition: all 0.3s;
+        }
+        
+        .rarity-segment.active {
+            background: #ff6b00;
+            box-shadow: 0 0 10px #ff6b00;
+        }
+        
+        /* ELEMENTAL INDEX */
+        .elemental-container {
+            margin: 16px 0;
+        }
+        
+        .elemental-label {
+            margin-bottom: 12px;
+            color: #ff6b00;
+        }
+        
+        .elemental-bars {
+            display: flex;
+            justify-content: space-between;
+            height: 80px;
+            align-items: flex-end;
+        }
+        
+        .elemental-bar {
+            width: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .bar-value {
+            font-size: 12px;
+            color: #00ff41;
+        }
+        
+        .bar-fill {
+            width: 100%;
+            background: linear-gradient(180deg, #00ff41, #ff6b00);
+            border: 1px solid #00ff41;
+            transition: height 0.5s;
+        }
+        
+        .bar-icon {
+            font-size: 16px;
+            color: #ff6b00;
+        }
+        
+        /* Атмосферные индикаторы */
+        .indicators-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .indicator {
+            background: rgba(0, 40, 20, 0.5);
+            border: 1px solid #00ff41;
+            padding: 8px;
+            height: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .indicator-title {
+            font-size: 12px;
+            margin-bottom: 4px;
+            opacity: 0.8;
+        }
+        
+        /* Радар */
+        .radar-sweep {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border: 1px solid #00ff41;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .radar-line {
+            position: absolute;
+            width: 50%;
+            height: 1px;
+            background: linear-gradient(90deg, #00ff41, transparent);
+            top: 50%;
+            left: 50%;
+            transform-origin: left center;
+            animation: radarSweep 2s linear infinite;
+        }
+        
+        @keyframes radarSweep {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Пульсирующий график */
+        .pulse-graph {
+            width: 100%;
+            height: 40px;
+            position: relative;
+        }
+        
+        .pulse-line {
+            stroke: #00ff41;
+            stroke-width: 2;
+            fill: none;
+            filter: drop-shadow(0 0 3px #00ff41);
+        }
+        
+        /* Загрузчики файлов */
+        .file-input-container {
+            margin-top: 16px;
+            padding: 16px;
+            border: 1px dashed #00ff41;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .file-input-container:hover {
+            background: rgba(0, 255, 65, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-label {
+            display: block;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        /* Scrolling code */
+        .code-scroll {
+            font-size: 10px;
+            line-height: 1.2;
+            height: 50px;
+            overflow: hidden;
+            position: relative;
+            color: rgba(0, 255, 65, 0.6);
+        }
+        
+        .code-content {
+            position: absolute;
+            animation: scrollCode 10s linear infinite;
+        }
+        
+        @keyframes scrollCode {
+            from { transform: translateY(100%); }
+            to { transform: translateY(-100%); }
+        }
+    </style>
+</head>
+<body>
+    <div class="noise"></div>
+    
+    <div class="main-container">
+        <!-- Левая панель - CAMERA IN -->
+        <div class="left-panel">
+            <div class="panel">
+                <div class="video-container" id="leftVideo">
+                    <div class="video-label">CAMERA IN</div>
+                    <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0, 255, 65, 0.3);">
+                        NO SIGNAL
+                    </div>
+                </div>
+                <div class="file-input-container">
+                    <input type="file" id="leftVideoInput" class="file-input" accept="video/*">
+                    <label for="leftVideoInput" class="upload-label">↑ LOAD VIDEO 1</label>
+                </div>
+            </div>
+            
+            <!-- Атмосферные индикаторы -->
+            <div class="panel">
+                <div class="indicator">
+                    <div class="indicator-title">RADAR SWEEP</div>
+                    <div class="radar-sweep">
+                        <div class="radar-line"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Центральная панель -->
+        <div class="center-panel panel">
+            <div class="header">
+                <div class="title">XENOSCAN</div>
+                <div class="protocol">PROTOCOL V.0.1</div>
+            </div>
+            
+            <div class="scan-area" id="scanArea">
+                <div class="specimen-container" id="specimenContainer">
+                    <!-- Сканирующая линия -->
+                    <div class="scan-line"></div>
+                    
+                    <!-- Круговой ретикул -->
+                    <div class="reticle">
+                        <svg viewBox="0 0 500 500">
+                            <circle cx="250" cy="250" r="200" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                            <circle cx="250" cy="250" r="150" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                            <circle cx="250" cy="250" r="100" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                            <line x1="250" y1="0" x2="250" y2="500" stroke="#00ff41" stroke-width="0.5" opacity="0.2"/>
+                            <line x1="0" y1="250" x2="500" y2="250" stroke="#00ff41" stroke-width="0.5" opacity="0.2"/>
+                        </svg>
+                    </div>
+                    
+                    <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0, 255, 65, 0.3);">
+                        NO SPECIMEN LOADED
+                    </div>
+                </div>
+            </div>
+            
+            <div class="file-input-container">
+                <input type="file" id="specimenInput" class="file-input" accept="image/*">
+                <label for="specimenInput" class="upload-label">↑ LOAD SPECIMEN IMAGE</label>
+            </div>
+        </div>
+        
+        <!-- Правая панель -->
+        <div class="right-panel">
+            <div class="panel">
+                <div class="video-container" id="rightVideo">
+                    <div class="video-label">RT ANALYSIS</div>
+                    <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0, 255, 65, 0.3);">
+                        NO SIGNAL
+                    </div>
+                </div>
+                <div class="file-input-container">
+                    <input type="file" id="rightVideoInput" class="file-input" accept="video/*">
+                    <label for="rightVideoInput" class="upload-label">↑ LOAD VIDEO 2</label>
+                </div>
+            </div>
+            
+            <!-- Информационная панель -->
+            <div class="panel info-panel">
+                <div class="specimen-info">
+                    <div class="specimen-id" id="specimenId">FLORA-09</div>
+                    <div class="acquisition-info">
+                        <div>ACQUISITION DATE: SEP 24 2025</div>
+                        <div>LOCATION: SKAGIT VALLEY, WA</div>
+                    </div>
+                </div>
+                
+                <!-- RARITY -->
+                <div class="rarity-container">
+                    <div class="rarity-label">
+                        <span>RARITY INDEX</span>
+                        <span class="rarity-value" id="rarityValue">7.3</span>
+                    </div>
+                    <div class="rarity-bar" id="rarityBar">
+                        <!-- Сегменты будут добавлены через JS -->
+                    </div>
+                </div>
+                
+                <!-- ELEMENTAL INDEX -->
+                <div class="elemental-container">
+                    <div class="elemental-label">ELEMENTAL INDEX</div>
+                    <div class="elemental-bars" id="elementalBars">
+                        <!-- Бары будут добавлены через JS -->
+                    </div>
+                </div>
+                
+                <!-- Дополнительные индикаторы -->
+                <div class="indicators-grid">
+                    <div class="indicator">
+                        <div class="indicator-title">PULSE</div>
+                        <svg class="pulse-graph" viewBox="0 0 100 40">
+                            <polyline class="pulse-line" id="pulseLine" points="0,20 10,20 15,10 20,30 25,20 35,20 40,15 45,25 50,20 60,20 65,5 70,35 75,20 85,20 90,18 95,22 100,20"/>
+                        </svg>
+                    </div>
+                    
+                    <div class="indicator">
+                        <div class="indicator-title">SYSTEM</div>
+                        <div class="code-scroll">
+                            <div class="code-content">
+                                0x7A3F INIT<br>
+                                SCAN_MODE: ACTIVE<br>
+                                BUFFER: 2048KB<br>
+                                FREQ: 2.4GHz<br>
+                                SIGNAL: OPTIMAL<br>
+                                NANO-BANANA: v0<br>
+                                QUANTUM_FLUX: 0.73<br>
+                                ENTROPY: STABLE<br>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Инициализация RARITY бара
+        const rarityBar = document.getElementById('rarityBar');
+        for (let i = 0; i < 10; i++) {
+            const segment = document.createElement('div');
+            segment.className = 'rarity-segment';
+            rarityBar.appendChild(segment);
+        }
+        
+        // Анимация RARITY
+        function updateRarity() {
+            const value = Math.random() * 3 + 6; // 6-9 range
+            document.getElementById('rarityValue').textContent = value.toFixed(1);
+            
+            const segments = rarityBar.querySelectorAll('.rarity-segment');
+            const activeCount = Math.floor(value);
+            segments.forEach((seg, i) => {
+                seg.classList.toggle('active', i < activeCount);
+            });
+        }
+        
+        setInterval(updateRarity, 3000);
+        updateRarity();
+        
+        // ELEMENTAL INDEX
+        const elements = ['◆', '▲', '●', '■', '★', '✦'];
+        const elementalBars = document.getElementById('elementalBars');
+        
+        elements.forEach(icon => {
+            const bar = document.createElement('div');
+            bar.className = 'elemental-bar';
+            
+            const value = document.createElement('div');
+            value.className = 'bar-value';
+            value.textContent = Math.floor(Math.random() * 100);
+            
+            const fill = document.createElement('div');
+            fill.className = 'bar-fill';
+            fill.style.height = Math.random() * 60 + 20 + 'px';
+            
+            const iconEl = document.createElement('div');
+            iconEl.className = 'bar-icon';
+            iconEl.textContent = icon;
+            
+            bar.appendChild(value);
+            bar.appendChild(fill);
+            bar.appendChild(iconEl);
+            elementalBars.appendChild(bar);
+        });
+        
+        // Анимация баров
+        setInterval(() => {
+            elementalBars.querySelectorAll('.elemental-bar').forEach(bar => {
+                const fill = bar.querySelector('.bar-fill');
+                const value = bar.querySelector('.bar-value');
+                const newHeight = Math.random() * 60 + 20;
+                fill.style.height = newHeight + 'px';
+                value.textContent = Math.floor(newHeight * 1.2);
+            });
+        }, 2000);
+        
+        // Обработка загрузки файлов
+        document.getElementById('specimenInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const container = document.getElementById('specimenContainer');
+                    container.innerHTML = `
+                        <img src="${e.target.result}" class="specimen-image" alt="Specimen">
+                        <div class="wireframe-overlay">
+                            <svg viewBox="0 0 500 500">
+                                ${generateWireframe()}
+                            </svg>
+                        </div>
+                        <div class="scan-line"></div>
+                        <div class="reticle">
+                            <svg viewBox="0 0 500 500">
+                                <circle cx="250" cy="250" r="200" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                                <circle cx="250" cy="250" r="150" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                                <circle cx="250" cy="250" r="100" stroke="#00ff41" stroke-width="1" fill="none" opacity="0.3"/>
+                                <line x1="250" y1="0" x2="250" y2="500" stroke="#00ff41" stroke-width="0.5" opacity="0.2"/>
+                                <line x1="0" y1="250" x2="500" y2="250" stroke="#00ff41" stroke-width="0.5" opacity="0.2"/>
+                            </svg>
+                        </div>
+                    `;
+                    
+                    // Добавление лейблов частей
+                    setTimeout(() => {
+                        addPartLabels(container);
+                    }, 500);
+                    
+                    // Обновление ID
+                    updateSpecimenId();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Генерация псевдо-wireframe
+        function generateWireframe() {
+            let paths = '';
+            for (let i = 0; i < 20; i++) {
+                const x1 = Math.random() * 500;
+                const y1 = Math.random() * 500;
+                const x2 = Math.random() * 500;
+                const y2 = Math.random() * 500;
+                paths += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#00ff41" stroke-width="0.5" opacity="0.3"/>`;
+            }
+            
+            // Добавление узлов
+            for (let i = 0; i < 10; i++) {
+                const x = Math.random() * 500;
+                const y = Math.random() * 500;
+                paths += `<circle cx="${x}" cy="${y}" r="3" fill="#ff6b00" opacity="0.6"/>`;
+            }
+            
+            return paths;
+        }
+        
+        // Добавление лейблов частей
+        function addPartLabels(container) {
+            const labels = ['CORE NODE', 'PETAL-LIMB', 'CLAW HOOK', 'NEURAL HUB', 'FLUX GATE'];
+            const positions = [
+                { top: '20%', left: '70%' },
+                { top: '40%', left: '15%' },
+                { top: '60%', left: '75%' },
+                { top: '75%', left: '25%' },
+                { top: '35%', left: '50%' }
+            ];
+            
+            labels.forEach((text, i) => {
+                const label = document.createElement('div');
+                label.className = 'part-label';
+                label.textContent = text;
+                label.style.top = positions[i].top;
+                label.style.left = positions[i].left;
+                container.appendChild(label);
+            });
+        }
+        
+        // Обновление ID specimen
+        function updateSpecimenId() {
+            const types = ['FLORA', 'FAUNA', 'HYBRID', 'UNKNOWN'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const number = Math.floor(Math.random() * 99).toString().padStart(2, '0');
+            document.getElementById('specimenId').textContent = `${type}-${number}`;
+        }
+        
+        // Загрузка видео
+        function loadVideo(inputId, containerId) {
+            document.getElementById(inputId).addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file && file.type.startsWith('video/')) {
+                    const url = URL.createObjectURL(file);
+                    const container = document.getElementById(containerId);
+                    const label = container.querySelector('.video-label').outerHTML;
+                    container.innerHTML = `
+                        ${label}
+                        <video src="${url}" loop muted autoplay></video>
+                    `;
+                }
+            });
+        }
+        
+        loadVideo('leftVideoInput', 'leftVideo');
+        loadVideo('rightVideoInput', 'rightVideo');
+        
+        // Анимация пульса
+        setInterval(() => {
+            const pulseLine = document.getElementById('pulseLine');
+            let points = '';
+            for (let i = 0; i <= 100; i += 5) {
+                const y = Math.random() * 30 + 5;
+                points += `${i},${y} `;
+            }
+            pulseLine.setAttribute('points', points);
+        }, 1000);
+        
+        // Звуковые эффекты (muted by default)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = false;
+        
+        // Добавляем кнопку звука
+        const soundToggle = document.createElement('div');
+        soundToggle.textContent = '🔇';
+        soundToggle.style.cssText = `
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            cursor: pointer;
+            font-size: 24px;
+            z-index: 1001;
+        `;
+        document.body.appendChild(soundToggle);
+        
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+            if (soundEnabled) {
+                audioContext.resume();
+                playBeep();
+            }
+        });
+        
+        function playBeep() {
+            if (!soundEnabled) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            gainNode.gain.value = 0.05;
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.05);
+        }
+        
+        // Периодические бипы
+        setInterval(() => {
+            if (Math.random() > 0.7) playBeep();
+        }, 3000);
+    </script>
+</body>
+</html>
